@@ -375,28 +375,85 @@ class GraphApp:
             self.canvas.create_oval(x-NODE_R, y-NODE_R, x+NODE_R, y+NODE_R, fill=fill, outline=outline, width=2)
             self.canvas.create_text(x, y, text=nid, fill="white", font=("Arial", 10, "bold"))
 
+    # --- HELPER: Hộp thoại nhập Node an toàn ---
+    def ask_node(self, title, prompt):
+        # Lấy danh sách node hiện có để gợi ý hoặc check
+        if not self.algo.nodes: return None
+        default_val = list(self.algo.nodes.keys())[0]
+        
+        while True:
+            val = simpledialog.askstring(title, prompt, initialvalue=default_val)
+            if val is None: return None # User bấm Cancel
+            val = val.strip()
+            if val in self.algo.nodes:
+                return val
+            else:
+                messagebox.showerror("Lỗi", f"Node '{val}' không tồn tại! Nhập lại đi.")
+
     def run_algo(self, name):
-        if not self.algo.nodes: messagebox.showwarning("!", "Graph trống!"); return
+        if not self.algo.nodes: 
+            messagebox.showwarning("!", "Graph trống trơn, vẽ gì đi bro!"); return
+        
+        # Reset Log
         self.tabs.select(self.tab_logs)
         self.log_text.delete(1.0, tk.END)
-        self.log(f"--- START: {name.upper()} ---")
+        self.log(f"--- PREPARE: {name.upper()} ---")
+
+        start_node = None
+        end_node = None
+
+        # 1. NHÓM CẦN START & END
+        if name in ['dijkstra', 'ford']:
+            start_node = self.ask_node("Input", f"Chọn Node BẮT ĐẦU cho {name}:")
+            if not start_node: return 
+            end_node = self.ask_node("Input", f"Chọn Node KẾT THÚC cho {name}:")
+            if not end_node: return
+
+        # 2. NHÓM CẦN START ONLY
+        elif name in ['bfs', 'dfs', 'prim', 'fleury', 'hierholzer']:
+            start_node = self.ask_node("Input", f"Chọn Node BẮT ĐẦU cho {name}:")
+            if not start_node: return
+
+        # 3. NHÓM TỰ ĐỘNG (Kruskal, Bipartite) -> Không cần hỏi gì cả
+
+        # --- CHẠY THUẬT TOÁN ---
+        self.log(f">> Running {name} | Start={start_node} | End={end_node}")
         
-        start = list(self.algo.nodes.keys())[0]
-        end = list(self.algo.nodes.keys())[-1]
         steps = []; final_colors = None
         try:
-            if name == 'bfs': steps = self.algo.bfs(start)
-            elif name == 'dfs': steps = self.algo.dfs(start)
-            elif name == 'dijkstra': steps = self.algo.dijkstra(start, end)
-            elif name == 'prim': steps = self.algo.prim()
+            if name == 'bfs': steps = self.algo.bfs(start_node)
+            elif name == 'dfs': steps = self.algo.dfs(start_node)
+            elif name == 'dijkstra': steps = self.algo.dijkstra(start_node, end_node)
+            elif name == 'prim': 
+                # Prim cần trick một chút để đảm bảo nó bắt đầu từ đúng node user chọn
+                # Logic cũ của Prim tự lấy node[0], giờ ta sửa lại logic gọi hàm hoặc
+                # Sửa nhanh: Swap node chọn lên đầu danh sách (hơi phèn)
+                # Cách chuẩn: Sửa hàm Prim bên logic nhận tham số start. 
+                # -> Ở đây tôi giả định bạn sẽ sửa thêm hàm Prim bên kia nhận tham số start.
+                # Nếu không sửa bên kia thì nó sẽ mặc định lấy node đầu tiên.
+                # Để triệt để, bạn nên sửa def prim(self, start_node=None) bên logic nhé.
+                # Tạm thời gọi thế này nếu logic chưa sửa:
+                steps = self.algo.prim(start_node)
+                # (Lưu ý: Bạn nên vào prim bên logic sửa dòng 'start = ...' thành 'start = start_node if start_node else ...')
+
             elif name == 'kruskal': steps = self.algo.kruskal()
-            elif name == 'ford': steps = self.algo.ford_fulkerson(start, end)
+            elif name == 'ford': steps = self.algo.ford_fulkerson(start_node, end_node)
+            
             elif name == 'bipartite':
                 res, steps, final_colors = self.algo.check_bipartite()
-                steps.append({'type': 'info', 'desc': "2 Phía: OK" if res else "KHÔNG PHẢI 2 PHÍA"})
-            elif name == 'fleury': steps = self.algo.fleury()
-            elif name == 'hierholzer': steps = self.algo.hierholzer()
-        except Exception as e: self.log(f"Err: {e}"); return
+                steps.append({'type': 'info', 'desc': "KẾT QUẢ: 2 Phía OK" if res else "KẾT QUẢ: KHÔNG PHẢI 2 PHÍA"})
+            
+            elif name == 'fleury': 
+                # Fleury cũng nên nhận start node nếu muốn chuẩn chỉ
+                steps = self.algo.fleury(start_node) 
+            elif name == 'hierholzer': 
+                steps = self.algo.hierholzer(start_node)
+
+        except Exception as e: 
+            self.log(f"Crash: {e}")
+            import traceback; traceback.print_exc() # In lỗi ra console để debug
+            return
+            
         self.animate(steps, final_colors)
 
     def animate(self, steps, final_colors=None):

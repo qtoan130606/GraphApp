@@ -121,31 +121,48 @@ class GraphLogic:
         _visit(start)
         return steps
 
-    # CƠ BẢN 3: Thuật toán Dijkstra – Tìm đường đi ngắn nhất giữa 2 đỉnh
+    # CƠ BẢN 3: Thuật toán Dijkstra – Tìm đường đi ngắn nhất (CHẶN TRỌNG SỐ ÂM)
     def dijkstra(self, start, end):
         steps = []
+        
+        # [CHECK] Kiểm tra trọng số âm
+        for u in self.adj:
+            for v, w in self.adj[u].items():
+                if w < 0:
+                    steps.append({'type': 'info', 'desc': f'LỖI: Phát hiện cạnh âm ({u}->{v}: {w}). Dijkstra không chạy được!'})
+                    return steps
+
         pq = [(0, start)]
         dist = {n: float('inf') for n in self.nodes}
         parent = {start: None}
         dist[start] = 0
+        
+        steps.append({'type': 'highlight', 'nodes': [start], 'desc': f'Dijkstra Start: {start} -> Target: {end}'})
+
         while pq:
             d, u = heapq.heappop(pq)
             if d > dist[u]: continue
+            
             steps.append({'type': 'current', 'node': u, 'desc': f'Xét {u} (min={d})'})
             if u == end: break
+            
             neighbors = sorted(self.adj.get(u, {}).items(), key=lambda item: int(item[0]) if item[0].isdigit() else item[0])
             for v, w in neighbors:
                 new_cost = dist[u] + w
                 if new_cost < dist[v]:
                     dist[v] = new_cost; parent[v] = u
                     heapq.heappush(pq, (new_cost, v))
-                    steps.append({'type': 'relax', 'u': u, 'v': v, 'desc': f'Update {v}={new_cost}'})
+                    steps.append({'type': 'relax', 'u': u, 'v': v, 'desc': f'Relax {v}={new_cost}'})
+        
         path = []
         if dist[end] != float('inf'):
             curr = end
             while curr is not None: path.append(curr); curr = parent.get(curr)
             path.reverse()
             steps.append({'type': 'path', 'nodes': path, 'desc': f'Shortest Path: {dist[end]}'})
+        else:
+             steps.append({'type': 'info', 'desc': f'Không tìm thấy đường đi tới {end}'})
+             
         return steps
 
     # --- THUẬT TOÁN BỊ CHẶN Ở CHẾ ĐỘ CÓ HƯỚNG ---
@@ -177,7 +194,7 @@ class GraphLogic:
         return True, steps, {nid: COLOR_MAP_BIPARTITE[c] for nid, c in colors.items()}
 
     # NÂNG CAO 7.1: Thuật toán PRIM 
-    def prim(self): 
+    def prim(self, start_node=None):
         steps = []
         # [BLOCK] Prim MST
         if self.is_directed:
@@ -185,7 +202,7 @@ class GraphLogic:
             return steps
             
         if not self.nodes: return steps
-        start = list(self.nodes.keys())[0]
+        start = start_node if start_node else list(self.nodes.keys())[0]
         visited = {start}; edges = []
         for v, w in self.adj.get(start, {}).items(): heapq.heappush(edges, (w, start, v))
         steps.append({'type': 'highlight', 'nodes': [start], 'desc': 'Prim Start'})
@@ -255,7 +272,7 @@ class GraphLogic:
         return steps
 
     # NÂNG CAO 7.4: Thuật toán FLEURY 
-    def fleury(self):
+    def fleury(self, start_node=None):
         steps = []
         # [BLOCK] Fleury
         if self.is_directed:
@@ -315,7 +332,7 @@ class GraphLogic:
         return steps
 
      # NÂNG CAO 7.5: Thuật toán HIERHOLZER 
-    def hierholzer(self):
+    def hierholzer(self, start_node=None):
         steps = []
         # [BLOCK] Hierholzer (Block directed cho an toàn)
         if self.is_directed:
